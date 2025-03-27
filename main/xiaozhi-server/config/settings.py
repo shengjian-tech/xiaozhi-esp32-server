@@ -3,6 +3,11 @@ import argparse
 from ruamel.yaml import YAML
 from collections.abc import Mapping
 from core.utils.util import read_config, get_project_dir
+import os
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker, Session, declarative_base
+from contextlib import contextmanager
+from pydantic.v1 import BaseSettings
 
 default_config_file = "config.yaml"
 
@@ -125,3 +130,39 @@ def check_config_file():
         error_msg += "2、将根目录的config.yaml文件复制到data下，重命名为.config.yaml\n"
         error_msg += "3、将密钥逐个复制到新的配置文件中\n"
         raise ValueError(error_msg)
+
+
+"""配置文件"""
+yamlConfig = load_config()
+
+"""数据库连接"""
+PG_CONN_STR = f"""{yamlConfig["database"]["driver"]}://{yamlConfig["database"]["user"]}:{yamlConfig["database"]["password"]}@{yamlConfig["database"]["host"]}:{yamlConfig["database"]["port"]}/{yamlConfig["database"]["database_name"]}?sslmode=disable"""
+os.environ["PG_CONN_STR"] = PG_CONN_STR
+
+class Settings(BaseSettings):
+    conn: str = os.getenv("PG_CONN_STR")  # 禁用ssl连接,因为本地没有ssl证书┭┮﹏┭┮
+
+settings = Settings()
+
+#db session
+engine = create_engine(
+    settings.conn,
+    pool_size=3000,
+    pool_pre_ping=True, #都会发送一个小的测试请求（如执行一条简单的SQL语句），以确保该连接是有效的。如果发现连接已经失效或不可用，它会被自动丢弃，并从连接池中获取一个新的有效连接。这有助于避免因数据库连接意外断开而导致的应用程序错误，尤其是在网络不稳定或数据库服务器偶尔重启的情况下。
+    #pool_recycle=3600 #3600 意味着连接将在一小时后被强制回收
+)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base = declarative_base()
+
+@contextmanager
+def getDB(ctx=None, scoped=False):
+    session = SessionLocal()
+    try:
+        yield session
+        #session.commit()
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()
+
