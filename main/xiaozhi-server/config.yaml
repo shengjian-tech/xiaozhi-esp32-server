@@ -535,3 +535,12 @@ wakeup_words:
   - "喵喵同学"
   - "小滨小滨"
   - "小冰小冰"
+
+#数据库
+database:
+  driver: postgresql # 数据库驱动
+  user: # 用户名
+  password: # 密码
+  host: # url
+  port: # 端口
+  database_name: # 数据库名
