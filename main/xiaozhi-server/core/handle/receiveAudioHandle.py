@@ -145,8 +145,17 @@ async def check_bind_device(conn):
                 continue
         conn.tts.tts_audio_queue.put((SentenceType.LAST, [], None))
     else:
-        text = f"没有找到该设备的版本信息，请正确配置 OTA地址，然后重新编译固件。"
+
+        if hasattr(conn, 'agent_not_found'):
+            text = f"未查询到当前设备绑定的智能体"
+            music_path = "config/assets/agent_not_found.wav"
+        elif hasattr(conn, 'voice_not_bound'):
+            text = f"当前设备绑定的智能体未配置音色"
+            music_path = "config/assets/voice_not_bound.wav"
+        else:
+            text = f"没有找到该设备的版本信息，请正确配置 OTA地址，然后重新编译固件。"
+            music_path = "config/assets/bind_not_found.wav"
+
         await send_stt_message(conn, text)
-        music_path = "config/assets/bind_not_found.wav"
         opus_packets, _ = audio_to_data(music_path)
         conn.tts.tts_audio_queue.put((SentenceType.LAST, opus_packets, text))

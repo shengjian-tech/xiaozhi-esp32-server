@@ -33,7 +33,7 @@ from config.config_loader import get_private_config_from_api
 from core.handle.receiveAudioHandle import handleAudioMessage
 from core.providers.tts.dto.dto import ContentType, TTSMessageDTO, SentenceType
 from config.logger import setup_logging, build_module_string, update_module_string
-from config.manage_api_client import DeviceNotFoundException, DeviceBindException
+from config.manage_api_client import DeviceNotFoundException, DeviceBindException, AgentNotFoundException, AgentVoiceNotBoundException
 
 
 TAG = __name__
@@ -182,7 +182,7 @@ class ConnectionHandler:
             # 启动超时检查任务
             self.timeout_task = asyncio.create_task(self._check_timeout())
 
-            self.welcome_msg = self.config["xiaozhi"]
+            self.welcome_msg = self.config["xiaofei"]
             self.welcome_msg["session_id"] = self.session_id
             await self.websocket.send(json.dumps(self.welcome_msg))
 
@@ -378,6 +378,14 @@ class ConnectionHandler:
         except DeviceBindException as e:
             self.need_bind = True
             self.bind_code = e.bind_code
+            private_config = {}
+        except AgentNotFoundException as e:
+            self.need_bind = True
+            self.agent_not_found = e.agent_not_found
+            private_config = {}
+        except AgentVoiceNotBoundException as e:
+            self.need_bind = True
+            self.voice_not_bound = e.voice_not_bound
             private_config = {}
         except Exception as e:
             self.need_bind = True

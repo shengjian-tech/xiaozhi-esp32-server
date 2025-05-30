@@ -17,6 +17,15 @@ class DeviceBindException(Exception):
         self.bind_code = bind_code
         super().__init__(f"设备绑定异常，绑定码: {bind_code}")
 
+class AgentNotFoundException(Exception):
+    def __init__(self, agent_id):
+        self.agent_not_found = agent_id
+        super().__init__(f"未找到智能体: {agent_id}")
+
+class AgentVoiceNotBoundException(Exception):
+    def __init__(self, agent_id):
+        self.voice_not_bound = agent_id
+        super().__init__(f"智能体 {agent_id} 未绑定音色")
 
 class ManageApiClient:
     _instance = None
@@ -73,6 +82,10 @@ class ManageApiClient:
             raise DeviceNotFoundException(result.get("msg"))
         elif result.get("code") == 10042:
             raise DeviceBindException(result.get("msg"))
+        elif result.get("code") == 10061:
+            raise AgentNotFoundException(result.get('msg'))
+        elif result.get("code") == 10062:
+            raise AgentVoiceNotBoundException(result.get('msg'))
         elif result.get("code") != 0:
             raise Exception(f"API返回错误: {result.get('msg', '未知错误')}")
 
@@ -127,7 +140,8 @@ class ManageApiClient:
 
 def get_server_config() -> Optional[Dict]:
     """获取服务器基础配置"""
-    return ManageApiClient._instance._execute_request("POST", "/config/server-base")
+    # return ManageApiClient._instance._execute_request("POST", "/config/server-base")
+    return ManageApiClient._instance._execute_request("POST", "/device/getConfig")
 
 
 def get_agent_models(
@@ -136,7 +150,8 @@ def get_agent_models(
     """获取代理模型配置"""
     return ManageApiClient._instance._execute_request(
         "POST",
-        "/config/agent-models",
+        # "/config/agent-models",
+        "/device/getAgentModels",
         json={
             "macAddress": mac_address,
             "clientId": client_id,
@@ -165,24 +180,24 @@ def report(
     """带熔断的业务方法示例"""
     if not content or not ManageApiClient._instance:
         return None
-    try:
-        return ManageApiClient._instance._execute_request(
-            "POST",
-            f"/agent/chat-history/report",
-            json={
-                "macAddress": mac_address,
-                "sessionId": session_id,
-                "chatType": chat_type,
-                "content": content,
-                "reportTime": report_time,
-                "audioBase64": (
-                    base64.b64encode(audio).decode("utf-8") if audio else None
-                ),
-            },
-        )
-    except Exception as e:
-        print(f"TTS上报失败: {e}")
-        return None
+    # try:
+    #     return ManageApiClient._instance._execute_request(
+    #         "POST",
+    #         f"/agent/chat-history/report",
+    #         json={
+    #             "macAddress": mac_address,
+    #             "sessionId": session_id,
+    #             "chatType": chat_type,
+    #             "content": content,
+    #             "reportTime": report_time,
+    #             "audioBase64": (
+    #                 base64.b64encode(audio).decode("utf-8") if audio else None
+    #             ),
+    #         },
+    #     )
+    # except Exception as e:
+    #     print(f"TTS上报失败: {e}")
+    #     return None
 
 
 def init_service(config):
