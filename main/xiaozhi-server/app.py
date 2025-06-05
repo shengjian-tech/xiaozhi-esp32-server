@@ -85,7 +85,7 @@ async def main():
         websocket_port = int(server_config.get("port", 8000))
 
     logger.bind(tag=TAG).info(
-        "Websocket地址是\tws://{}:{}/xiaozhi/v1/",
+        "Websocket地址是\tws://{}:{}/xiaofei/v1/",
         get_local_ip(),
         websocket_port,
     )

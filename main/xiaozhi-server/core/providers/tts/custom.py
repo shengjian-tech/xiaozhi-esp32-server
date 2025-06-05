@@ -32,19 +32,38 @@ class TTSProvider(TTSProviderBase):
         return os.path.join(self.output_file, f"tts-{datetime.now().date()}@{uuid.uuid4().hex}.{self.format}")
 
     async def text_to_speak(self, text, output_file):
-        request_params = {}
+        # request_params = {}
+        # for k, v in self.params.items():
+        #     if isinstance(v, str) and "{prompt_text}" in v:
+        #         v = v.replace("{prompt_text}", text)
+        #     request_params[k] = v
+        #
+        # if self.method.upper() == "POST":
+        #     resp = requests.post(self.url, json=request_params, headers=self.headers)
+        # else:
+        #     resp = requests.get(self.url, params=request_params, headers=self.headers)
+        # if resp.status_code == 200:
+        #     with open(output_file, "wb") as file:
+        #         file.write(resp.content)
+        # else:
+        #     error_msg = f"Custom TTS请求失败: {resp.status_code} - {resp.text}"
+        #     logger.bind(tag=TAG).error(error_msg)
+        #     raise Exception(error_msg)  # 抛出异常，让调用方捕获
+
+
+        # POST 方法请求(/speech)
+        request_body = {}
         for k, v in self.params.items():
             if isinstance(v, str) and "{prompt_text}" in v:
                 v = v.replace("{prompt_text}", text)
-            request_params[k] = v
+            request_body[k] = v
 
-        if self.method.upper() == "POST":
-            resp = requests.post(self.url, json=request_params, headers=self.headers)
-        else:
-            resp = requests.get(self.url, params=request_params, headers=self.headers)
+        resp = requests.post(self.url, headers=self.headers, data=json.dumps(request_body, ensure_ascii=False).encode('utf-8'))
+
         if resp.status_code == 200:
             with open(output_file, "wb") as file:
                 file.write(resp.content)
+
         else:
             error_msg = f"Custom TTS请求失败: {resp.status_code} - {resp.text}"
             logger.bind(tag=TAG).error(error_msg)
