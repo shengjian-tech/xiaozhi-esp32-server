@@ -4,6 +4,7 @@ import time
 from core.providers.tts.dto.dto import SentenceType
 from core.utils.util import get_string_no_punctuation_or_emoji, analyze_emotion
 from loguru import logger
+import re
 
 TAG = __name__
 
@@ -33,6 +34,8 @@ emoji_map = {
 
 
 async def sendAudioMessage(conn, sentenceType, audios, text):
+    # 去除括号中的语气词
+    text = await handle_text(text)
     # 发送句子开始消息
     if text is not None:
         emotion = analyze_emotion(text)
@@ -144,3 +147,45 @@ async def send_stt_message(conn, text):
     )
     conn.client_is_speaking = True
     await send_tts_message(conn, "start")
+
+
+"""
+移除括号中的语气词
+"""
+async def handle_text(text):
+    if not text or len(text) == 0:
+        return text
+
+    # 1. 删除中文括号（）和英文括号()及其中内容
+    text = re.sub(r'（[^）]*）|$[^)]*$', '', text)
+
+    # 2. 删除成对但中间为空的双引号（包括中文、英文引号）
+    text = re.sub(r'["“"][\s“”]*["”]', '', text)
+
+    # 3. 删除不成对的单个引号/括号
+    stack = []
+    chars = list(text)
+    quote_pairs = {'"': '"', '“': '”', '‘': '’'}
+    for i, ch in enumerate(chars):
+        if ch in quote_pairs:
+            stack.append((i, ch))
+        elif ch in quote_pairs.values():
+            if stack and quote_pairs.get(stack[-1][1]) == ch:
+                stack.pop()
+            else:
+                # 如果是孤立右引号，标记为待删除
+                chars[i] = '\x00DELETE\x00'
+
+    # 标记所有未闭合的左引号为待删除
+    for pos, _ in stack:
+        chars[pos] = '\x00DELETE\x00'
+
+    # 构建新字符串，移除所有标记为 DELETE 的字符
+    cleaned_text = ''.join([c for c in chars if c != '\x00DELETE\x00'])
+
+    # 4. 再次删除可能残留的独立符号（增强版）
+    # 匹配：单独的引号、括号、省略号等
+    cleaned_text = re.sub(r'(?<![\w““”‘’])["“”‘’)(…⋯…～~]|(?:\.\.\.)|(?:\u2026)|(?:\u2026\u2026*)', '', cleaned_text)
+
+    # 5. 最终去除首尾空白
+    return cleaned_text.strip()

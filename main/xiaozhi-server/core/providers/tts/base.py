@@ -19,6 +19,7 @@ from core.providers.tts.dto.dto import (
     ContentType,
     InterfaceType,
 )
+import re
 
 
 import traceback
@@ -69,6 +70,9 @@ class TTSProviderBase(ABC):
         self.tts_stop_request = False
         self.processed_chars = 0
         self.is_first_sentence = True
+        self.brackets_arr = []  # 存放找到的括号及内容
+        self.text_before_brackets = ""  # 括号前被忽略的文本
+        self.before_text_arr = []   # 括号前被忽略的文本数组
 
     def generate_filename(self, extension=".wav"):
         return os.path.join(
@@ -189,6 +193,9 @@ class TTSProviderBase(ABC):
                     self.tts_text_buff = []
                     self.is_first_sentence = True
                     self.tts_audio_first_sentence = True
+                    self.brackets_arr = []  # 重置
+                    self.text_before_brackets = ""  # 重置
+                    self.before_text_arr = []  # 重置
                 elif ContentType.TEXT == message.content_type:
                     self.tts_text_buff.append(message.content_detail)
                     segment_text = self._get_segment_text()
@@ -258,11 +265,79 @@ class TTSProviderBase(ABC):
         if hasattr(self, "ws") and self.ws:
             await self.ws.close()
 
+    # def _get_segment_text(self):
+    #     # 合并当前全部文本并处理未分割部分
+    #     full_text = "".join(self.tts_text_buff)
+    #     current_text = full_text[self.processed_chars :]  # 从未处理的位置开始
+    #     last_punct_pos = -1
+    #
+    #     # 根据是否是第一句话选择不同的标点符号集合
+    #     punctuations_to_use = (
+    #         self.first_sentence_punctuations
+    #         if self.is_first_sentence
+    #         else self.punctuations
+    #     )
+    #
+    #     for punct in punctuations_to_use:
+    #         pos = current_text.rfind(punct)
+    #         if (pos != -1 and last_punct_pos == -1) or (
+    #             pos != -1 and pos < last_punct_pos
+    #         ):
+    #             last_punct_pos = pos
+    #
+    #     if last_punct_pos != -1:
+    #         segment_text_raw = current_text[: last_punct_pos + 1]
+    #         segment_text = textUtils.get_string_no_punctuation_or_emoji(
+    #             segment_text_raw
+    #         )
+    #         self.processed_chars += len(segment_text_raw)  # 更新已处理字符位置
+    #
+    #         # 如果是第一句话，在找到第一个逗号后，将标志设置为False
+    #         if self.is_first_sentence:
+    #             self.is_first_sentence = False
+    #
+    #         return segment_text
+    #     elif self.tts_stop_request and current_text:
+    #         segment_text = current_text
+    #         self.is_first_sentence = True  # 重置标志
+    #         return segment_text
+    #     else:
+    #         return None
+
     def _get_segment_text(self):
         # 合并当前全部文本并处理未分割部分
         full_text = "".join(self.tts_text_buff)
-        current_text = full_text[self.processed_chars :]  # 从未处理的位置开始
+        # 判断是否有不成对的括号
+        single_bracket = self.has_unpaired_brackets(full_text)
+        if single_bracket:
+            return None
+
+        skip_text_len = 0
+
+        # 判断是否有双括号
+        found, brackets = self.has_paired_brackets(full_text)
+        if found and len(self.brackets_arr) < len(brackets) and len(brackets) > 0:
+            # 有括号, 且是新的括号
+            self.brackets_arr = brackets
+
+            skip_text_len = len(full_text) - self.processed_chars - len(brackets[-1])
+            skip_text = full_text[self.processed_chars : (self.processed_chars+skip_text_len)]
+            self.before_text_arr.append(skip_text)
+
+            # 将新的括号及内容所占字符的个数加到开始索引上
+            self.processed_chars = self.processed_chars + len(brackets[-1]) + skip_text_len
+
+
+        current_text = "".join(self.before_text_arr) + full_text[self.processed_chars:]
+
+
+
+        # 去除'”'后,如果为空字符串返回None
+        if self.is_text_empty_after_removing_quotes(current_text):
+            return None
+
         last_punct_pos = -1
+
 
         # 根据是否是第一句话选择不同的标点符号集合
         punctuations_to_use = (
@@ -283,16 +358,31 @@ class TTSProviderBase(ABC):
             segment_text = textUtils.get_string_no_punctuation_or_emoji(
                 segment_text_raw
             )
-            self.processed_chars += len(segment_text_raw)  # 更新已处理字符位置
+            # processed_chars的长度中已经包含了text_before_brackets的长度
+            """
+            self.processed_chars: 嘿，分析员，（双手叉腰，昂起头）   16
+            segment_text_raw: 分析员，有我这样的优秀战友在，你居然还想着火锅？  24
+            full_text: 嘿，分析员，（双手叉腰，昂起头）有我这样的优秀战友在，你居然还想着火锅？   36
+            
+            "分析员，"  的长度用了2次, 所以下一次索引不能从40开始,要从 16 + 24 - len(分析员，)  = 36 开始
+            """
+
+            # self.processed_chars = self.processed_chars + len(segment_text_raw) - len(self.text_before_brackets)  # 更新已处理字符位置 ----------------
+            self.processed_chars = self.processed_chars + len(segment_text_raw) - sum(len(item) for item in self.before_text_arr)  # 更新已处理字符位置
 
             # 如果是第一句话，在找到第一个逗号后，将标志设置为False
             if self.is_first_sentence:
                 self.is_first_sentence = False
 
+            self.text_before_brackets = ""  # 重置
+            self.before_text_arr = []  # 重置
             return segment_text
         elif self.tts_stop_request and current_text:
-            segment_text = current_text
+            segment_text = self.remove_parentheses(current_text)
             self.is_first_sentence = True  # 重置标志
+            self.brackets_arr = []  # 重置
+            self.text_before_brackets = ""  # 重置
+            self.before_text_arr = []  # 重置
             return segment_text
         else:
             return None
@@ -331,7 +421,10 @@ class TTSProviderBase(ABC):
             bool: 是否成功处理了文本
         """
         full_text = "".join(self.tts_text_buff)
-        remaining_text = full_text[self.processed_chars :]
+        remaining_text = "".join(self.before_text_arr) + full_text[self.processed_chars :]
+        # 去除单个单引号,若去除单引号后长度为0,返回false,否则将单引号传递给TTS合成会报错
+        if self.is_text_empty_after_removing_quotes(remaining_text):
+            return False
         if remaining_text:
             segment_text = textUtils.get_string_no_punctuation_or_emoji(remaining_text)
             if segment_text:
@@ -343,3 +436,87 @@ class TTSProviderBase(ABC):
                 self.processed_chars += len(full_text)
                 return True
         return False
+
+
+    """
+    判断文本中是否有单括号(中文括号、英文括号)
+    """
+    def has_unpaired_brackets(self, text):
+        stack = []
+
+        for char in text:
+            if char == '(' or char == '（':
+                stack.append(char)
+            elif char == ')' or char == '）':
+                if not stack:
+                    # 没有对应的左括号
+                    return True
+                left = stack.pop()
+                # 判断是否匹配（严格匹配中英文）
+                if (char == ')' and left != '(') or (char == '）' and left != '（'):
+                    return True
+
+        # 最后栈里还有未匹配的左括号
+        return len(stack) > 0
+
+    """
+    判断文本中是否有成对的括号(中文括号、英文括号)
+    """
+
+    def has_paired_brackets(self, text):
+        matched_brackets = []  # 存储所有找到的完整括号内容
+
+        # 记录每个左括号的位置和类型
+        bracket_positions = []
+
+        for i, char in enumerate(text):
+            if char == '(' or char == '（':
+                bracket_positions.append((i, char))  # 保存位置和类型
+            elif char == ')' and bracket_positions:
+                start_idx, open_char = bracket_positions.pop()
+                if open_char == '(':
+                    end_idx = i + 1
+                    matched_brackets.append(text[start_idx:end_idx])
+            elif char == '）' and bracket_positions:
+                start_idx, open_char = bracket_positions.pop()
+                if open_char == '（':
+                    end_idx = i + 1
+                    matched_brackets.append(text[start_idx:end_idx])
+
+        found = len(matched_brackets) > 0
+        return found, matched_brackets
+
+    def remove_parentheses(self, text):
+        if text is None or len(text) == 0:
+            return None  # 输入为空或 None 时直接返回 None
+
+        # 步骤 1: 删除括号及括号中的内容（支持中英文）
+        pattern_parentheses = r'（[^）]*）|$[^)]*$'
+        text = re.sub(pattern_parentheses, '', text)
+
+        # 步骤 2: 删除所有单引号 “ 和 ”
+        text = text.replace('“', '').replace('”', '')
+
+        # 步骤 3: 去除首尾空白字符
+        cleaned_text = text.strip()
+
+        # 步骤 4: 如果最终文本为空，返回 None
+        if not cleaned_text:
+            return None
+
+        return cleaned_text
+
+    def is_text_empty_after_removing_quotes(self, text):
+        if not text:  # 如果是 None 或空字符串
+            return True
+
+        # 删除所有类型的单引号（中文、英文、左右引号）
+        text_cleaned = text.replace('“', '') \
+            .replace('”', '') \
+            .replace("'", '') \
+            .replace('‘', '') \
+            .replace('’', '') \
+            .strip()
+
+        # 判断清理后是否为空
+        return len(text_cleaned) == 0
