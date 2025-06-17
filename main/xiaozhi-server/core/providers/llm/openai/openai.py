@@ -37,7 +37,7 @@ class LLMProvider(LLMProviderBase):
         check_model_key("LLM", self.api_key)
         self.client = openai.OpenAI(api_key=self.api_key, base_url=self.base_url)
 
-    def response(self, session_id, dialogue, **kwargs):
+    def response(self, session_id, dialogue, device_id, **kwargs):
         try:
             responses = self.client.chat.completions.create(
                 model=self.model_name,
@@ -47,6 +47,9 @@ class LLMProvider(LLMProviderBase):
                 temperature=kwargs.get("temperature", self.temperature),
                 top_p=kwargs.get("top_p", self.top_p),
                 frequency_penalty=kwargs.get("frequency_penalty", self.frequency_penalty),
+                extra_body={
+                    "prompt": "web_" + self.api_key + device_id
+                },
             )
 
             is_active = True
@@ -75,10 +78,16 @@ class LLMProvider(LLMProviderBase):
         except Exception as e:
             logger.bind(tag=TAG).error(f"Error in response generation: {e}")
 
-    def response_with_functions(self, session_id, dialogue, functions=None):
+    def response_with_functions(self, session_id, dialogue, device_id, functions=None):
         try:
             stream = self.client.chat.completions.create(
-                model=self.model_name, messages=dialogue, stream=True, tools=functions
+                model=self.model_name,
+                messages=dialogue,
+                stream=True,
+                tools=functions,
+                extra_body={
+                    "prompt": "web_" + self.api_key + device_id
+                },
             )
 
             for chunk in stream:

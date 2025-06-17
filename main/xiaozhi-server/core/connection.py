@@ -625,12 +625,14 @@ class ConnectionHandler:
                 llm_responses = self.llm.response_with_functions(
                     self.session_id,
                     self.dialogue.get_llm_dialogue_with_memory(memory_str),
+                    self.device_id,
                     functions=functions,
                 )
             else:
                 llm_responses = self.llm.response(
                     self.session_id,
                     self.dialogue.get_llm_dialogue_with_memory(memory_str),
+                    self.device_id,
                 )
         except Exception as e:
             self.logger.bind(tag=TAG).error(f"LLM 处理出错 {query}: {e}")
