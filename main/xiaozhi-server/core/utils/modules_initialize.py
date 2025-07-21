@@ -1,6 +1,7 @@
 from typing import Dict, Any
 from config.logger import setup_logging
 from core.utils import tts, llm, intent, memory, vad, asr
+import json
 
 TAG = __name__
 logger = setup_logging()
@@ -36,6 +37,11 @@ def initialize_modules(
     # 初始化LLM模块
     if init_llm:
         select_llm_module = config["selected_module"]["LLM"]
+
+        # 若config["LLM"][select_llm_module]的值是字符串,先转为字典
+        if isinstance(config["LLM"][select_llm_module], str):
+            config["LLM"][select_llm_module] = json.loads(config["LLM"][select_llm_module])
+
         llm_type = (
             select_llm_module
             if "type" not in config["LLM"][select_llm_module]

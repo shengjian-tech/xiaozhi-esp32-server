@@ -73,6 +73,7 @@ class TTSProviderBase(ABC):
         self.brackets_arr = []  # 存放找到的括号及内容
         self.text_before_brackets = ""  # 括号前被忽略的文本
         self.before_text_arr = []   # 括号前被忽略的文本数组
+        self.number_of_symbols = 0  # "*" 的数量
 
     def generate_filename(self, extension=".wav"):
         return os.path.join(
@@ -196,9 +197,11 @@ class TTSProviderBase(ABC):
                     self.brackets_arr = []  # 重置
                     self.text_before_brackets = ""  # 重置
                     self.before_text_arr = []  # 重置
+                    self.number_of_symbols = 0  # 重置
                 elif ContentType.TEXT == message.content_type:
                     self.tts_text_buff.append(message.content_detail)
                     segment_text = self._get_segment_text()
+
                     if segment_text:
                         tts_file = self.to_tts(segment_text)
                         if tts_file:
@@ -306,7 +309,26 @@ class TTSProviderBase(ABC):
 
     def _get_segment_text(self):
         # 合并当前全部文本并处理未分割部分
-        full_text = "".join(self.tts_text_buff)
+        full_text = "".join(self.tts_text_buff).strip()
+
+        # 处理回复中的被"*"包括的语气、动作、环境描述
+        if "*" in full_text:
+            if full_text.count("*") % 2 == 1:
+                return None
+            else:
+                # 新的成对的 "*"
+                if self.number_of_symbols != full_text.count("*"):
+                    # 找出所有 *...* 格式的字符串
+                    matches = re.findall(r'\*[^*]*\*', full_text)
+                    if matches:
+                        last_match = matches[-1]  # 取最后一个匹配项
+                        length = len(last_match)  # 获取其长度
+                        # 更改索引的位置
+                        self.processed_chars = self.processed_chars + length
+                        self.number_of_symbols = full_text.count("*")
+                    # 清除所有 *...* 包含的内容
+                    full_text = re.sub(r'\*[^*]*\*', '', full_text)
+
         # 判断是否有不成对的括号
         single_bracket = self.has_unpaired_brackets(full_text)
         if single_bracket:
@@ -359,15 +381,6 @@ class TTSProviderBase(ABC):
                 segment_text_raw
             )
             # processed_chars的长度中已经包含了text_before_brackets的长度
-            """
-            self.processed_chars: 嘿，分析员，（双手叉腰，昂起头）   16
-            segment_text_raw: 分析员，有我这样的优秀战友在，你居然还想着火锅？  24
-            full_text: 嘿，分析员，（双手叉腰，昂起头）有我这样的优秀战友在，你居然还想着火锅？   36
-            
-            "分析员，"  的长度用了2次, 所以下一次索引不能从40开始,要从 16 + 24 - len(分析员，)  = 36 开始
-            """
-
-            # self.processed_chars = self.processed_chars + len(segment_text_raw) - len(self.text_before_brackets)  # 更新已处理字符位置 ----------------
             self.processed_chars = self.processed_chars + len(segment_text_raw) - sum(len(item) for item in self.before_text_arr)  # 更新已处理字符位置
 
             # 如果是第一句话，在找到第一个逗号后，将标志设置为False
@@ -383,6 +396,7 @@ class TTSProviderBase(ABC):
             self.brackets_arr = []  # 重置
             self.text_before_brackets = ""  # 重置
             self.before_text_arr = []  # 重置
+            self.number_of_symbols = 0  # 重置
             return segment_text
         else:
             return None
@@ -420,7 +434,7 @@ class TTSProviderBase(ABC):
         Returns:
             bool: 是否成功处理了文本
         """
-        full_text = "".join(self.tts_text_buff)
+        full_text = "".join(self.tts_text_buff).strip()
         remaining_text = "".join(self.before_text_arr) + full_text[self.processed_chars :]
         # 去除单个单引号,若去除单引号后长度为0,返回false,否则将单引号传递给TTS合成会报错
         if self.is_text_empty_after_removing_quotes(remaining_text):

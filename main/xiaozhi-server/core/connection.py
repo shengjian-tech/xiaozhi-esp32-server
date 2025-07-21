@@ -38,7 +38,7 @@ from config.config_loader import get_private_config_from_api
 from core.providers.tts.dto.dto import ContentType, TTSMessageDTO, SentenceType
 from config.logger import setup_logging, build_module_string, update_module_string
 from config.manage_api_client import DeviceNotFoundException, DeviceBindException, AgentNotFoundException, AgentVoiceNotBoundException
-
+from core.providers.llm.toptok.toptok import LLMProvider as ToptokLLMProvider
 
 TAG = __name__
 
@@ -586,8 +586,10 @@ class ConnectionHandler:
 
     def change_system_prompt(self, prompt):
         self.prompt = prompt
-        # 更新系统prompt至上下文
-        self.dialogue.update_system_message(self.prompt)
+        # 非 toptok 的 LLMProvider 实例(toptok不需要)
+        if not isinstance(self.llm, ToptokLLMProvider):
+            # 更新系统prompt至上下文
+            self.dialogue.update_system_message(self.prompt)
 
     def chat(self, query, tool_call=False):
         self.logger.bind(tag=TAG).info(f"大模型收到用户消息: {query}")
@@ -620,20 +622,31 @@ class ConnectionHandler:
             uuid_str = str(uuid.uuid4()).replace("-", "")
             self.sentence_id = uuid_str
 
-            if functions is not None:
-                # 使用支持functions的streaming接口
-                llm_responses = self.llm.response_with_functions(
+            if isinstance(self.llm, ToptokLLMProvider):
+                # 是 toptok 的 LLMProvider 实例
+                functions = None    # toptok 暂时不能使用工具函数
+                llm_responses = self.llm.response(
                     self.session_id,
                     self.dialogue.get_llm_dialogue_with_memory(memory_str),
                     self.device_id,
                     functions=functions,
                 )
             else:
-                llm_responses = self.llm.response(
-                    self.session_id,
-                    self.dialogue.get_llm_dialogue_with_memory(memory_str),
-                    self.device_id,
-                )
+                # 其他 LLMProvider 实例
+                if functions is not None:
+                    # 使用支持functions的streaming接口
+                    llm_responses = self.llm.response_with_functions(
+                        self.session_id,
+                        self.dialogue.get_llm_dialogue_with_memory(memory_str),
+                        self.device_id,
+                        functions=functions,
+                    )
+                else:
+                    llm_responses = self.llm.response(
+                        self.session_id,
+                        self.dialogue.get_llm_dialogue_with_memory(memory_str),
+                        self.device_id,
+                    )
         except Exception as e:
             self.logger.bind(tag=TAG).error(f"LLM 处理出错 {query}: {e}")
             return None

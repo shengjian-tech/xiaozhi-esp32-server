@@ -9,27 +9,27 @@ import re
 TAG = __name__
 
 emoji_map = {
-    "neutral": "😶",
-    "happy": "🙂",
-    "laughing": "😆",
-    "funny": "😂",
-    "sad": "😔",
-    "angry": "😠",
-    "crying": "😭",
-    "loving": "😍",
-    "embarrassed": "😳",
-    "surprised": "😲",
-    "shocked": "😱",
-    "thinking": "🤔",
-    "winking": "😉",
-    "cool": "😎",
-    "relaxed": "😌",
-    "delicious": "🤤",
-    "kissy": "😘",
-    "confident": "😏",
-    "sleepy": "😴",
-    "silly": "😜",
-    "confused": "🙄",
+    "neutral": "Neutral",
+    "happy": "Happy",
+    "laughing": "Happy",
+    "funny": "Happy",
+    "sad": "Sad",
+    "angry": "Angry",
+    "crying": "Cry",
+    "loving": "Happy",
+    "embarrassed": "Embarrassed",
+    "surprised": "Surprised",
+    "shocked": "Shock",
+    "thinking": "Confused",
+    "winking": "Wink",
+    "cool": "Happy",
+    "relaxed": "Happy",
+    "delicious": "Happy",
+    "kissy": "Happy",
+    "confident": "Happy",
+    "sleepy": "Sleepy",
+    "silly": "Happy",
+    "confused": "Confused"
 }
 
 
@@ -39,7 +39,7 @@ async def sendAudioMessage(conn, sentenceType, audios, text):
     # 发送句子开始消息
     if text is not None:
         emotion = analyze_emotion(text)
-        emoji = emoji_map.get(emotion, "🙂")  # 默认使用笑脸
+        emoji = emoji_map.get(emotion, "happy")  # 默认使用笑脸
         await conn.websocket.send(
             json.dumps(
                 {
@@ -156,36 +156,75 @@ async def handle_text(text):
     if not text or len(text) == 0:
         return text
 
-    # 1. 删除中文括号（）和英文括号()及其中内容
+    # 1. 删除括号及其内容：包括中文括号（）和英文括号()
     text = re.sub(r'（[^）]*）|$[^)]*$', '', text)
 
-    # 2. 删除成对但中间为空的双引号（包括中文、英文引号）
-    text = re.sub(r'["“"][\s“”]*["”]', '', text)
-
-    # 3. 删除不成对的单个引号/括号
+    # 2. 使用栈检测成对引号，标记孤立引号为待删除
     stack = []
     chars = list(text)
     quote_pairs = {'"': '"', '“': '”', '‘': '’'}
+    quote_positions = {}  # 记录每一对引号的位置
+
     for i, ch in enumerate(chars):
         if ch in quote_pairs:
-            stack.append((i, ch))
+            stack.append((i, ch))  # 左引号入栈
         elif ch in quote_pairs.values():
             if stack and quote_pairs.get(stack[-1][1]) == ch:
-                stack.pop()
+                left_idx, left_quote = stack.pop()
+                quote_positions[left_idx] = i  # 记录成对引号范围
+                quote_positions[i] = left_idx
             else:
-                # 如果是孤立右引号，标记为待删除
+                # 孤立右引号，标记删除
                 chars[i] = '\x00DELETE\x00'
 
-    # 标记所有未闭合的左引号为待删除
+    # 标记未闭合的左引号为待删除
     for pos, _ in stack:
         chars[pos] = '\x00DELETE\x00'
 
-    # 构建新字符串，移除所有标记为 DELETE 的字符
-    cleaned_text = ''.join([c for c in chars if c != '\x00DELETE\x00'])
+    # 构建新字符串，暂时不处理引号
+    temp_text = ''.join([c for c in chars if c != '\x00DELETE\x00'])
 
-    # 4. 再次删除可能残留的独立符号（增强版）
-    # 匹配：单独的引号、括号、省略号等
-    cleaned_text = re.sub(r'(?<![\w““”‘’])["“”‘’)(…⋯…～~]|(?:\.\.\.)|(?:\u2026)|(?:\u2026\u2026*)', '', cleaned_text)
+    # 3. 清理残留符号，但保留成对引号和非首尾省略号
+    cleaned_parts = []
+    i = 0
+    while i < len(temp_text):
+        matched = False
+        # 检查是否在成对引号内
+        in_quotes = any(start <= i <= end for start, end in quote_positions.items())
 
-    # 5. 最终去除首尾空白
-    return cleaned_text.strip()
+        # 如果当前位置是符号，并且不在引号中，则考虑删除
+        if not in_quotes:
+            # 匹配单独的标点符号（不包括成对引号中的）
+            symbol_match = re.match(r'[‘’"()（）\u2026.]', temp_text[i:])
+            if symbol_match:
+                char = symbol_match.group(0)
+                # 判断是否是省略号的一部分
+                ellipsis_match = re.match(r'(…|\.\.\.|\u2026)', temp_text[i:])
+                if ellipsis_match:
+                    ellipsis = ellipsis_match.group(0)
+                    # 判断是否处于文本中间（不是开头或结尾）
+                    start_pos = i
+                    end_pos = i + len(ellipsis)
+                    if 0 < start_pos or end_pos < len(temp_text):
+                        # 保留省略号
+                        cleaned_parts.append(ellipsis)
+                        i += len(ellipsis)
+                        matched = True
+                    else:
+                        # 首或尾的省略号，删除
+                        i += len(ellipsis)
+                        matched = True
+                else:
+                    # 其他符号，删除
+                    i += 1
+                    matched = True
+
+        if not matched:
+            cleaned_parts.append(temp_text[i])
+            i += 1
+
+    cleaned_text = ''.join(cleaned_parts)
+
+    # 4. 去除首尾空白字符
+    final_text = cleaned_text.strip()
+    return final_text
