@@ -11,8 +11,8 @@ class TTSProvider(TTSProviderBase):
     def __init__(self, config, delete_audio_file):
         super().__init__(config, delete_audio_file)
         self.url = config.get("url")
-        self.refer_wav_path = config.get("refer_wav_path")
-        self.prompt_text = config.get("prompt_text")
+        self.refer_wav_path = config.get('ref_audio')if config.get('ref_audio') else config.get("refer_wav_path")
+        self.prompt_text = config.get('ref_text')if config.get('ref_text') else config.get("prompt_text")
         self.prompt_language = config.get("prompt_language")
         self.text_language = config.get("text_language", "audo")
 
@@ -32,6 +32,7 @@ class TTSProvider(TTSProviderBase):
         self.cut_punc = config.get("cut_punc", "")
         self.inp_refs = parse_string_to_list(config.get("inp_refs"))
         self.if_sr = str(config.get("if_sr", False)).lower() in ("true", "1", "yes")
+        self.audio_file_type = config.get("format", "wav")
 
     async def text_to_speak(self, text, output_file):
         request_params = {
@@ -52,8 +53,11 @@ class TTSProvider(TTSProviderBase):
 
         resp = requests.get(self.url, params=request_params)
         if resp.status_code == 200:
-            with open(output_file, "wb") as file:
-                file.write(resp.content)
+            if output_file:
+                with open(output_file, "wb") as file:
+                    file.write(resp.content)
+            else:
+                return resp.content
         else:
             error_msg = f"GPT_SoVITS_V3 TTS请求失败: {resp.status_code} - {resp.text}"
             logger.bind(tag=TAG).error(error_msg)

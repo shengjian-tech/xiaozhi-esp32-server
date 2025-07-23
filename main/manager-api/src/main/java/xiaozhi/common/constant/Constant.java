@@ -112,6 +112,16 @@ public interface Constant {
     String FILE_EXTENSION_SEG = ".";
 
     /**
+     * mcp接入点路径
+     */
+    String SERVER_MCP_ENDPOINT = "server.mcp_endpoint";
+
+    /**
+     * mcp接入点路径
+     */
+    String SERVER_VOICE_PRINT = "server.voice_print";
+
+    /**
      * 无记忆
      */
     String MEMORY_NO_MEM = "Memory_nomem";
@@ -227,7 +237,7 @@ public interface Constant {
     /**
      * 版本号
      */
-    public static final String VERSION = "0.5.4";
+    public static final String VERSION = "0.7.2";
 
     /**
      * 无效固件URL

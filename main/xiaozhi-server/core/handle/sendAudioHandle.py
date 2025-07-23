@@ -2,6 +2,7 @@ import json
 import asyncio
 import time
 from core.providers.tts.dto.dto import SentenceType
+from core.utils import textUtils
 from core.utils.util import get_string_no_punctuation_or_emoji, analyze_emotion
 from loguru import logger
 import re
@@ -50,6 +51,8 @@ async def sendAudioMessage(conn, sentenceType, audios, text):
                 }
             )
         )
+    conn.logger.bind(tag=TAG).info(f"发送音频消息: {sentenceType}, {text}")
+
     pre_buffer = False
     if conn.tts.tts_audio_first_sentence and text is not None:
         conn.logger.bind(tag=TAG).info(f"发送第一段语音: {text}")
@@ -78,7 +81,6 @@ async def sendAudio(conn, audios, pre_buffer=True):
     frame_duration = 60  # 帧时长（毫秒），匹配 Opus 编码
     start_time = time.perf_counter()
     play_position = 0
-    last_reset_time = time.perf_counter()  # 记录最后的重置时间
 
     # 仅当第一句话时执行预缓冲
     if pre_buffer:
@@ -94,10 +96,8 @@ async def sendAudio(conn, audios, pre_buffer=True):
         if conn.client_abort:
             break
 
-        # 每分钟重置一次计时器
-        if time.perf_counter() - last_reset_time > 60:
-            await conn.reset_timeout()
-            last_reset_time = time.perf_counter()
+        # 重置没有声音的状态
+        conn.last_activity_time = time.time() * 1000
 
         # 计算预期发送时间
         expected_time = start_time + (play_position / 1000)
@@ -141,7 +141,23 @@ async def send_stt_message(conn, text):
         return
 
     """发送 STT 状态消息"""
-    stt_text = get_string_no_punctuation_or_emoji(text)
+
+    # 解析JSON格式，提取实际的用户说话内容
+    display_text = text
+    try:
+        # 尝试解析JSON格式
+        if text.strip().startswith('{') and text.strip().endswith('}'):
+            parsed_data = json.loads(text)
+            if isinstance(parsed_data, dict) and "content" in parsed_data:
+                # 如果是包含说话人信息的JSON格式，只显示content部分
+                display_text = parsed_data["content"]
+                # 保存说话人信息到conn对象
+                if "speaker" in parsed_data:
+                    conn.current_speaker = parsed_data["speaker"]
+    except (json.JSONDecodeError, TypeError):
+        # 如果不是JSON格式，直接使用原始文本
+        display_text = text
+    stt_text = textUtils.get_string_no_punctuation_or_emoji(display_text)
     await conn.websocket.send(
         json.dumps({"type": "stt", "text": stt_text, "session_id": conn.session_id})
     )

@@ -85,13 +85,18 @@ class TTSProvider(TTSProviderBase):
         self.reference_id = (
             None if not config.get("reference_id") else config.get("reference_id")
         )
-        self.reference_audio = parse_string_to_list(config.get("reference_audio"))
-        self.reference_text = parse_string_to_list(config.get("reference_text"))
+        self.reference_audio = parse_string_to_list(
+             config.get('ref_audio')if config.get('ref_audio') else config.get("reference_audio")
+        )
+        self.reference_text = parse_string_to_list(
+             config.get('ref_text')if config.get('ref_text') else config.get("reference_text")
+        )
         self.format = config.get("response_format", "wav")
-
+        self.audio_file_type = config.get("response_format", "wav")
         self.api_key = config.get("api_key", "YOUR_API_KEY")
-        have_key = check_model_key("FishSpeech TTS", self.api_key)
-        if not have_key:
+        model_key_msg = check_model_key("FishSpeech TTS", self.api_key)
+        if model_key_msg:
+            logger.bind(tag=TAG).error(model_key_msg)
             return
         self.normalize = str(config.get("normalize", True)).lower() in (
             "true",
@@ -170,8 +175,11 @@ class TTSProvider(TTSProviderBase):
         if response.status_code == 200:
             audio_content = response.content
 
-            with open(output_file, "wb") as audio_file:
-                audio_file.write(audio_content)
+            if output_file:
+                with open(output_file, "wb") as audio_file:
+                    audio_file.write(audio_content)
+            else:
+                return audio_content
 
         else:
             error_msg = f"Request failed with status code {response.status_code}"

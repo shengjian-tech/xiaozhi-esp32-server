@@ -104,7 +104,9 @@ wakeup_words:
   - "喵喵同学"
   - "小滨小滨"
   - "小冰小冰"
-
+# MCP接入点地址，地址格式为：ws://你的mcp接入点ip或者域名:端口号/mcp/?token=你的token
+# 详细教程 https://github.com/xinnan-tech/xiaozhi-esp32-server/blob/main/docs/mcp-endpoint-integration.md
+mcp_endpoint: 你的接入点 websocket地址
 # 插件的基础配置
 plugins:
   # 获取天气插件的配置，这里填写你的api_key
@@ -117,11 +119,12 @@ plugins:
   # 更多类型的新闻列表查看 https://www.chinanews.com.cn/rss/
   get_news_from_chinanews:
     default_rss_url: "https://www.chinanews.com.cn/rss/society.xml"
-    category_urls:
-      society: "https://www.chinanews.com.cn/rss/society.xml"
-      world: "https://www.chinanews.com.cn/rss/world.xml"
-      finance: "https://www.chinanews.com.cn/rss/finance.xml"
-  get_news_from_newsnow: {"url": "https://newsnow.busiyi.world/api/s?id="}
+    society_rss_url: "https://www.chinanews.com.cn/rss/society.xml"
+    world_rss_url: "https://www.chinanews.com.cn/rss/world.xml"
+    finance_rss_url: "https://www.chinanews.com.cn/rss/finance.xml"
+  get_news_from_newsnow:
+    url: "https://newsnow.busiyi.world/api/s?id="
+    news_sources: "澎湃新闻;百度热搜;财联社"
   home_assistant:
     devices:
       - 客厅,玩具灯,switch.cuco_cn_460494544_cp1_on_p_2_1
@@ -135,6 +138,16 @@ plugins:
       - ".wav"
       - ".p3"
     refresh_time: 300 # 刷新音乐列表的时间间隔，单位为秒
+
+# 声纹识别配置
+voiceprint:
+  # 声纹接口地址
+  url: 
+  # 说话人配置：speaker_id,名称,描述
+  speakers:
+    - "test1,张三,张三是一个程序员"
+    - "test2,李四,李四是一个产品经理"
+    - "test3,王五,王五是一个设计师"
 
 # #####################################################################################
 # ################################以下是角色模型配置######################################
@@ -159,7 +172,7 @@ end_prompt:
   enable: true # 是否开启结束语
   # 结束语
   prompt: |
-    请你以“时间过得真快”未来头，用富有感情、依依不舍的话来结束这场对话吧！
+    请你以"时间过得真快"未来头，用富有感情、依依不舍的话来结束这场对话吧！
 
 # 具体处理时选择的模块(The module selected for specific processing)
 selected_module:
@@ -196,7 +209,7 @@ Intent:
     # 如果你的不想使用selected_module.LLM意图识别，这里最好使用独立的LLM作为意图识别，例如使用免费的ChatGLMLLM
     llm: ChatGLMLLM
     # plugins_func/functions下的模块，可以通过配置，选择加载哪个模块，加载后对话支持相应的function调用
-    # 系统默认已经记载“handle_exit_intent(退出识别)”、“play_music(音乐播放)”插件，请勿重复加载
+    # 系统默认已经记载"handle_exit_intent(退出识别)"、"play_music(音乐播放)"插件，请勿重复加载
     # 下面是加载查天气、角色切换、加载查新闻的插件示例
     functions:
       - get_weather
@@ -206,7 +219,7 @@ Intent:
     # 不需要动type
     type: function_call
     # plugins_func/functions下的模块，可以通过配置，选择加载哪个模块，加载后对话支持相应的function调用
-    # 系统默认已经记载“handle_exit_intent(退出识别)”、“play_music(音乐播放)”插件，请勿重复加载
+    # 系统默认已经记载"handle_exit_intent(退出识别)"、"play_music(音乐播放)"插件，请勿重复加载
     # 下面是加载查天气、角色切换、加载查新闻的插件示例
     functions:
       - change_role
@@ -278,6 +291,7 @@ ASR:
     # 可以在这里申请相关Key等信息
     # https://console.volcengine.com/speech/app
     # DoubaoASR和DoubaoStreamASR的区别是：DoubaoASR是按次收费，DoubaoStreamASR是按时收费
+    # 开通地址https://console.volcengine.com/speech/service/10011
     # 一般来说按次收费的更便宜，但是DoubaoStreamASR使用了大模型技术，效果更好
     type: doubao_stream
     appid: 你的火山引擎语音合成服务appid
@@ -297,15 +311,39 @@ ASR:
     output_dir: tmp/
   AliyunASR:
     # 阿里云智能语音交互服务，需要先在阿里云平台开通服务，然后获取验证信息
+    # HTTP POST请求，一次性处理完整音频
     # 平台地址：https://nls-portal.console.aliyun.com/
     # appkey地址：https://nls-portal.console.aliyun.com/applist
     # token地址：https://nls-portal.console.aliyun.com/overview
+    # AliyunASR和AliyunStreamASR的区别是：AliyunASR是批量处理场景，AliyunStreamASR是实时交互场景
+    # 一般来说非流式ASR更便宜（0.004元/秒，¥0.24/分钟）
+    # 但是AliyunStreamASR实时性更好（0.005元/秒，¥0.3/分钟）
     # 定义ASR API类型
     type: aliyun
     appkey: 你的阿里云智能语音交互服务项目Appkey
     token: 你的阿里云智能语音交互服务AccessToken，临时的24小时，要长期用下方的access_key_id，access_key_secret
     access_key_id: 你的阿里云账号access_key_id
     access_key_secret: 你的阿里云账号access_key_secret
+    output_dir: tmp/
+  AliyunStreamASR:
+    # 阿里云智能语音交互服务 - 实时流式语音识别
+    # WebSocket连接，实时处理音频流
+    # 平台地址：https://nls-portal.console.aliyun.com/
+    # appkey地址：https://nls-portal.console.aliyun.com/applist
+    # token地址：https://nls-portal.console.aliyun.com/overview
+    # AliyunASR和AliyunStreamASR的区别是：AliyunASR是批量处理场景，AliyunStreamASR是实时交互场景
+    # 一般来说非流式ASR更便宜（0.004元/秒，¥0.24/分钟）
+    # 但是AliyunStreamASR实时性更好（0.005元/秒，¥0.3/分钟）
+    # 定义ASR API类型
+    type: aliyun_stream
+    appkey: 你的阿里云智能语音交互服务项目Appkey
+    token: 你的阿里云智能语音交互服务AccessToken，临时的24小时，要长期用下方的access_key_id，access_key_secret
+    access_key_id: 你的阿里云账号access_key_id
+    access_key_secret: 你的阿里云账号access_key_secret
+    # 服务器地域选择，可选择距离更近的服务器以减少延迟，如nls-gateway-cn-hangzhou.aliyuncs.com(杭州)等
+    host: nls-gateway-cn-shanghai.aliyuncs.com
+    # 断句检测时间(毫秒)，控制静音多长时间后进行断句，默认800毫秒
+    max_sentence_silence: 800
     output_dir: tmp/
   BaiduASR:
     # 获取AppID、API Key、Secret Key：https://console.bce.baidu.com/ai-engine/old/#/ai/speech/app/list
@@ -317,13 +355,40 @@ ASR:
     # 语言参数，1537为普通话，具体参考：https://ai.baidu.com/ai-doc/SPEECH/0lbxfnc9b
     dev_pid: 1537
     output_dir: tmp/
+  OpenaiASR:
+    # OpenAI语音识别服务，需要先在OpenAI平台创建组织并获取api_key
+    # 支持中、英、日、韩等多种语音识别，具体参考文档https://platform.openai.com/docs/guides/speech-to-text
+    # 需要网络连接
+    # 申请步骤：
+    # 1.登录OpenAI Platform。https://auth.openai.com/log-in
+    # 2.创建api-key  https://platform.openai.com/settings/organization/api-keys
+    # 3.模型可以选择gpt-4o-transcribe或GPT-4o mini Transcribe
+    type: openai
+    api_key: 你的OpenAI API密钥
+    base_url: https://api.openai.com/v1/audio/transcriptions
+    model_name: gpt-4o-mini-transcribe
+    output_dir: tmp/
+  GroqASR:
+    # Groq语音识别服务，需要先在Groq Console创建API密钥
+    # 申请步骤：
+    # 1.登录groq Console。https://console.groq.com/home
+    # 2.创建api-key  https://console.groq.com/keys
+    # 3.模型可以选择whisper-large-v3-turbo或whisper-large-v3（distil-whisper-large-v3-en仅支持英语转录）
+    type: openai
+    api_key: 你的Groq API密钥
+    base_url: https://api.groq.com/openai/v1/audio/transcriptions
+    model_name: whisper-large-v3-turbo
+    output_dir: tmp/
 
+
+  
 VAD:
   SileroVAD:
     type: silero
     threshold: 0.5
+    threshold_low: 0.3
     model_dir: models/snakers4_silero-vad
-    min_silence_duration_ms: 700  # 如果说话停顿比较长，可以把这个值设置大一些
+    min_silence_duration_ms: 200  # 如果说话停顿比较长，可以把这个值设置大一些
 
 LLM:
   # 所有openai类型均可以修改超参，以AliLLM为例
@@ -665,8 +730,30 @@ TTS:
     # volume: 50
     # speech_rate: 0
     # pitch_rate: 0
-    # 添加 302.ai TTS 配置
-    # token申请地址：https://dash.302.ai/
+  AliyunStreamTTS:
+    # 阿里云CosyVoice大模型流式文本语音合成
+    # 采用FlowingSpeechSynthesizer接口，支持更低延迟和更自然的语音质量
+    # 流式文本语音合成仅提供商用版，不支持试用，详情请参见试用版和商用版。要使用该功能，请开通商用版。
+    # 支持龙系列专用音色：longxiaochun、longyu、longchen等
+    # 平台地址：https://nls-portal.console.aliyun.com/
+    # appkey地址：https://nls-portal.console.aliyun.com/applist
+    # token地址：https://nls-portal.console.aliyun.com/overview
+    # 使用三阶段流式交互：StartSynthesis -> RunSynthesis -> StopSynthesis
+    type: aliyun_stream
+    output_dir: tmp/
+    appkey: 你的阿里云智能语音交互服务项目Appkey
+    token: 你的阿里云智能语音交互服务AccessToken，临时的24小时，要长期用下方的access_key_id，access_key_secret
+    voice: longxiaochun 
+    access_key_id: 你的阿里云账号access_key_id
+    access_key_secret: 你的阿里云账号access_key_secret
+    # 截至2025年7月21日大模型音色只有北京节点采用，其他节点暂不支持
+    host: nls-gateway-cn-beijing.aliyuncs.com
+    # 以下可不用设置，使用默认设置
+    # format: pcm  # 音频格式：pcm、wav、mp3
+    # sample_rate: 16000  # 采样率：8000、16000、24000
+    # volume: 50  # 音量：0-100
+    # speech_rate: 0  # 语速：-500到500
+    # pitch_rate: 0  # 语调：-500到500
   TencentTTS:
     # 腾讯云智能语音交互服务，需要先在腾讯云平台开通服务
     # appid、secret_id、secret_key申请地址：https://console.cloud.tencent.com/cam/capi
@@ -681,6 +768,8 @@ TTS:
 
   TTS302AI:
     # 302AI语音合成服务，需要先在302平台创建账户充值，并获取密钥信息
+    # 添加 302.ai TTS 配置
+    # token申请地址：https://dash.302.ai/
     # 获取api_keyn路径：https://dash.302.ai/apis/list
     # 价格，$35/百万字符。火山原版¥450元/百万字符
     type: doubao
@@ -754,4 +843,15 @@ TTS:
     headers: # 自定义请求头
       # Authorization: Bearer xxxx
     format: mp3 # 接口返回的音频格式
+    output_dir: tmp/
+  LinkeraiTTS:
+    type: linkerai
+    api_url: https://tts.linkerai.cn/tts
+    audio_format: "pcm"
+    # 默认的access_token供大家测试时免费使用的，此access_token请勿用于商业用途
+    # 如果效果不错，可自行申请token，申请地址：https://linkerai.cn
+    # 各参数意义见开发文档：https://tts.linkerai.cn/docs
+    # 支持声音克隆，可自行上传音频，填入voice参数，voice参数为空时，使用默认声音
+    access_token: "U4YdYXVfpwWnk2t5Gp822zWPCuORyeJL"
+    voice: "OUeAo1mhq6IBExi"
     output_dir: tmp/
