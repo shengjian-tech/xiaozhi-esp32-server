@@ -36,11 +36,9 @@ from core.auth import AuthMiddleware, AuthenticationError
 from config.config_loader import get_private_config_from_api
 from core.providers.tts.dto.dto import ContentType, TTSMessageDTO, SentenceType
 from config.logger import setup_logging, build_module_string, create_connection_logger
-from config.manage_api_client import DeviceNotFoundException, DeviceBindException
 from core.utils.prompt_manager import PromptManager
 from core.utils.voiceprint_provider import VoiceprintProvider
 from core.utils import textUtils
-from config.logger import setup_logging, build_module_string, update_module_string
 from config.manage_api_client import DeviceNotFoundException, DeviceBindException, AgentNotFoundException, AgentVoiceNotBoundException
 from core.providers.llm.toptok.toptok import LLMProvider as ToptokLLMProvider
 
@@ -706,11 +704,14 @@ class ConnectionHandler:
 
             # 是 toptok 的 LLMProvider 实例
             if isinstance(self.llm, ToptokLLMProvider):
-                llm_responses = self.llm.response(
+                # 使用支持functions的streaming接口
+                llm_responses = self.llm.response_with_functions(
                     self.session_id,
                     self.dialogue.get_llm_dialogue_with_memory(
                         memory_str, self.config.get("voiceprint", {})
                     ),
+                    self.device_id,
+                    functions=functions,
                 )
             else:
                 # 其他 LLMProvider 实例
@@ -721,6 +722,7 @@ class ConnectionHandler:
                         self.dialogue.get_llm_dialogue_with_memory(
                             memory_str, self.config.get("voiceprint", {})
                         ),
+                        self.device_id,
                         functions=functions,
                     )
                 else:
@@ -729,6 +731,7 @@ class ConnectionHandler:
                         self.dialogue.get_llm_dialogue_with_memory(
                             memory_str, self.config.get("voiceprint", {})
                         ),
+                        self.device_id,
                     )
         except Exception as e:
             self.logger.bind(tag=TAG).error(f"LLM 处理出错 {query}: {e}")
@@ -769,12 +772,12 @@ class ConnectionHandler:
                 content = response
 
             # 在llm回复中获取情绪表情，一轮对话只在开头获取一次
-            if emotion_flag:
-                asyncio.run_coroutine_threadsafe(
-                    textUtils.get_emotion(self, content),
-                    self.loop,
-                )
-                emotion_flag = False
+            # if emotion_flag:
+            #     asyncio.run_coroutine_threadsafe(
+            #         textUtils.get_emotion(self, content),
+            #         self.loop,
+            #     )
+            #     emotion_flag = False
 
             if content is not None and len(content) > 0:
                 if not tool_call_flag:
