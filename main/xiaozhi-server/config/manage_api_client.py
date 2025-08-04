@@ -161,17 +161,18 @@ def get_agent_models(
 
 
 def save_mem_local_short(mac_address: str, short_momery: str) -> Optional[Dict]:
-    try:
-        return ManageApiClient._instance._execute_request(
-            "PUT",
-            f"/agent/saveMemory/" + mac_address,
-            json={
-                "summaryMemory": short_momery,
-            },
-        )
-    except Exception as e:
-        print(f"存储短期记忆到服务器失败: {e}")
-        return None
+    return None # 短期记忆暂时不需要,记忆通过toptok的聊天记录实现上下文记忆
+    # try:
+    #     return ManageApiClient._instance._execute_request(
+    #         "PUT",
+    #         f"/agent/saveMemory/" + mac_address,
+    #         json={
+    #             "summaryMemory": short_momery,
+    #         },
+    #     )
+    # except Exception as e:
+    #     print(f"存储短期记忆到服务器失败: {e}")
+    #     return None
 
 
 def report(
@@ -180,24 +181,26 @@ def report(
     """带熔断的业务方法示例"""
     if not content or not ManageApiClient._instance:
         return None
-    # try:
-    #     return ManageApiClient._instance._execute_request(
-    #         "POST",
-    #         f"/agent/chat-history/report",
-    #         json={
-    #             "macAddress": mac_address,
-    #             "sessionId": session_id,
-    #             "chatType": chat_type,
-    #             "content": content,
-    #             "reportTime": report_time,
-    #             "audioBase64": (
-    #                 base64.b64encode(audio).decode("utf-8") if audio else None
-    #             ),
-    #         },
-    #     )
-    # except Exception as e:
-    #     print(f"TTS上报失败: {e}")
-    #     return None
+    try:
+        result =  ManageApiClient._instance._execute_request(
+            "POST",
+            # f"/agent/chat-history/report",
+            f"/device/report",
+            json={
+                "macAddress": mac_address,
+                "sessionId": session_id,
+                "chatType": chat_type,
+                "content": content,
+                "reportTime": report_time,
+                "audioBase64": (
+                    base64.b64encode(audio).decode("utf-8") if audio else None
+                ),
+            },
+        )
+        return  result
+    except Exception as e:
+        print(f"TTS上报失败: {e}")
+        return None
 
 
 def init_service(config):

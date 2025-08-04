@@ -55,7 +55,7 @@ class LLMProvider(LLMProviderBase):
         try:
             responses = self.client.chat.completions.create(
                 model=self.model_name,
-                messages=dialogue[-1:],
+                messages=dialogue,
                 stream=True,
                 max_tokens=kwargs.get("max_tokens", self.max_tokens),
                 temperature=kwargs.get("temperature", self.temperature),
@@ -104,9 +104,9 @@ class LLMProvider(LLMProviderBase):
         try:
             stream = self.client.chat.completions.create(
                 model=self.model_name,
-                messages=dialogue[-1:],
+                messages=dialogue,
                 stream=True,
-                tools=functions,
+                tools=None, # 不携带工具函数
                 extra_body={
                     "type": "xiaofei",
                     "chat_completion_source": "custom",

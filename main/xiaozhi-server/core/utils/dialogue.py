@@ -112,3 +112,49 @@ class Dialogue:
                 self.getMessages(m, dialogue)
 
         return dialogue
+
+
+
+    # toptok专用
+    def get_dialogue(
+        self, memory_str: str = None, voiceprint_config: dict = None
+    ) -> List[Dict[str, str]]:
+        # 构建对话
+        dialogue = []
+
+        # 基础系统提示
+        enhanced_system_prompt = ""
+
+        # 声纹
+        try:
+            speakers = voiceprint_config.get("speakers", [])
+            if speakers:
+                enhanced_system_prompt += "\n\n<speakers_info>"
+                for speaker_str in speakers:
+                    try:
+                        parts = speaker_str.split(",", 2)
+                        if len(parts) >= 2:
+                            name = parts[1].strip()
+                            # 如果描述为空，则为""
+                            description = (
+                                parts[2].strip() if len(parts) >= 3 else ""
+                            )
+                            enhanced_system_prompt += f"\n- {name}：{description}"
+                    except:
+                        pass
+                enhanced_system_prompt += "\n\n</speakers_info>"
+        except:
+            # 配置读取失败时忽略错误，不影响其他功能
+            pass
+
+        dialogue.append({"role": "system", "content": enhanced_system_prompt})
+
+        # 添加用户和助手的对话
+        for m in self.dialogue:
+            if m.role != "system":  # 跳过原始的系统消息
+                self.getMessages(m, dialogue)
+
+        # 过滤数组,只保留第一条和最后一条(第一条是声纹信息,最后一条是当前对话)
+        result = [dialogue[0], dialogue[-1]]
+
+        return result

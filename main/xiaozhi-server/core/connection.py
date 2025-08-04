@@ -707,7 +707,7 @@ class ConnectionHandler:
                 # 使用支持functions的streaming接口
                 llm_responses = self.llm.response_with_functions(
                     self.session_id,
-                    self.dialogue.get_llm_dialogue_with_memory(
+                    self.dialogue.get_dialogue(
                         memory_str, self.config.get("voiceprint", {})
                     ),
                     self.device_id,
